@@ -54,8 +54,12 @@ const callFirst = async (contract, names) => {
   return null;
 };
 
-// Logs desde el bloque de creación hasta el último. Si el RPC rechaza el rango completo
-// (límite de rango o de resultados), se divide a la mitad recursivamente.
+// Logs desde el bloque de creación hasta el último, en tramos que respetan el límite
+// de rango de los RPC (MetaMask/Infura: 10 000 bloques). Si un tramo igual falla,
+// se divide a la mitad.
+const LOG_CHUNK = 9000;
+const LOG_CONCURRENCY = 6;
+
 const queryLogsRange = async (contract, filter, from, to) => {
   try {
     return await contract.queryFilter(filter, from, to);
@@ -70,7 +74,24 @@ const queryLogsRange = async (contract, filter, from, to) => {
 
 const queryLogs = async (contract, filter, fromBlock = DEPLOY_BLOCK) => {
   const latest = await contract.runner.provider.getBlockNumber();
-  return queryLogsRange(contract, filter, fromBlock, latest);
+
+  const ranges = [];
+  for (let from = fromBlock; from <= latest; from += LOG_CHUNK) {
+    ranges.push([from, Math.min(from + LOG_CHUNK - 1, latest)]);
+  }
+
+  // Cola con concurrencia limitada para no saturar el RPC
+  const results = new Array(ranges.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < ranges.length) {
+      const i = next++;
+      results[i] = await queryLogsRange(contract, filter, ranges[i][0], ranges[i][1]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(LOG_CONCURRENCY, ranges.length) }, worker));
+
+  return results.flat();
 };
 
 const MAX_ID_SCAN = 500;
