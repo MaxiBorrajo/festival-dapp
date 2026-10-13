@@ -18,6 +18,21 @@ export const CONTRACT_ADDRESSES = {
   nft: '0xE7f397318797d95EB3ceBa5b3526Bf8Dd7d191Fe'
 };
 
+// Registro de tokens de pago y NFTs. Para sumar opciones basta con agregar entradas
+// (NFT con mint(uint256) o buyTicket(), ver NFT_ABI). El primer token es el "base":
+// el precio aleatorio se sortea en él y su factor de conversión es siempre 1.
+// Son los de fábrica; el usuario puede sumar más desde la app (se guardan en localStorage).
+export const DEFAULT_TOKENS = [
+  { id: 'mpc', address: CONTRACT_ADDRESSES.token, fallbackSymbol: 'MPC' }
+];
+
+// single: contrato con buyTicket() (1 entrada por compra, sin totalMinted/maxPerTx)
+export const DEFAULT_NFTS = [
+  { id: 'festival', address: CONTRACT_ADDRESSES.nft, name: 'Festival Ticket' }
+];
+
+export const BASE_TOKEN_ID = DEFAULT_TOKENS[0].id;
+
 // ABI estándar ERC-20
 export const ERC20_ABI = [
   "function name() view returns (string)",
@@ -45,6 +60,10 @@ export const NFT_ABI = [
   "function used(uint256 tokenId) view returns (bool)",
   "function mint(uint256 quantity) payable",
   "function checkIn(uint256 tokenId)",
+  "function ticketPrice() view returns (uint256)",
+  "function buyTicket() payable",
+  "function isTicketUsed(uint256 tokenId) view returns (bool)",
+  "event TicketMinted(address indexed buyer, uint256 indexed tokenId)",
   "function balanceOf(address owner) view returns (uint256)",
   "function ownerOf(uint256 tokenId) view returns (address)",
   "function tokenURI(uint256 tokenId) view returns (string)",

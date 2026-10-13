@@ -38,6 +38,25 @@ export const rollTokenPrice = (userBal) => {
   return Math.max(parseFloat((userBal * factor).toFixed(4)), 0.0001);
 };
 
+// Factor de conversión aleatorio entre el token base y otro token: 0.01 – 10
+export const rollConversionFactor = () =>
+  Math.max(parseFloat((Math.random() * 10).toFixed(2)), 0.01);
+
+// Monto en texto, sin ceros de más ni notación científica
+export const formatAmount = (n, maxDecimals = 4) =>
+  Number(n).toLocaleString('en-US', { maximumFractionDigits: maxDecimals, useGrouping: false });
+
+export const formatEth = (wei) => {
+  try {
+    const n = BigInt(wei);
+    if (n === 0n) return '0 ETH';
+    if (n < 10000000000n) return `${n.toString()} wei`;
+    return `${parseFloat(ethers.formatEther(n)).toFixed(6)} ETH`;
+  } catch {
+    return '—';
+  }
+};
+
 export const friendlyError = (err, { maxPerTx = 4, priceText = '' } = {}) => {
   const text = `${err?.data ?? ''} ${err?.message ?? ''} ${err?.reason ?? ''}`;
   if (err?.code === 'ACTION_REJECTED' || err?.code === 4001) return 'Operación cancelada en tu billetera.';

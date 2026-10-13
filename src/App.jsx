@@ -20,7 +20,10 @@ export default function App() {
   const wallet = useWallet(notify);
   const fest = useFestival({ account: wallet.account, chainId: wallet.chainId, notify });
 
+  const [headerTokenId, setHeaderTokenId] = useState(fest.tokens[0].id);
+
   const reload = () => fest.reload();
+  const totalTickets = Object.values(fest.nftBalances).reduce((a, b) => a + b, 0);
 
   return (
     <div className="min-h-screen flex flex-col selection:bg-accent selection:text-accent-fg">
@@ -29,7 +32,9 @@ export default function App() {
       <Header
         account={wallet.account}
         tokenSymbol={fest.token.symbol}
-        tokenBalance={fest.token.balance}
+        tokens={fest.tokens}
+        headerTokenId={fest.tokens.some((t) => t.id === headerTokenId) ? headerTokenId : fest.tokens[0].id}
+        onHeaderTokenChange={setHeaderTokenId}
         ethBalance={fest.ethBalance}
         isConnecting={wallet.isConnecting}
         hasLoaded={fest.hasLoaded}
@@ -44,7 +49,7 @@ export default function App() {
       <TabNav
         active={tab}
         onChange={setTab}
-        counts={{ buy: 0, tickets: fest.nft.balance, history: fest.transactions.length }}
+        counts={{ buy: 0, tickets: totalTickets, history: fest.transactions.length }}
       />
 
       {/* pb-28: deja espacio para la barra inferior fija en móvil */}
@@ -65,6 +70,21 @@ export default function App() {
                 isWrongNetwork={wallet.isWrongNetwork}
                 onConnect={wallet.connect}
                 token={fest.token}
+                tokens={fest.tokens}
+                registry={{
+                  customIds: fest.customIds,
+                  addToken: fest.addToken,
+                  addNft: fest.addNft,
+                  removeToken: fest.removeToken,
+                  removeNft: fest.removeNft
+                }}
+                selectToken={fest.selectToken}
+                nfts={fest.nfts}
+                selectedNftId={fest.selectedNftId}
+                selectNft={fest.selectNft}
+                factor={fest.factor}
+                payAmount={fest.payAmount}
+                estimateFees={fest.estimateFees}
                 nft={fest.nft}
                 randomPrice={fest.randomPrice}
                 quantity={fest.quantity}
@@ -85,8 +105,8 @@ export default function App() {
             <TicketsTab
               account={wallet.account}
               tickets={fest.tickets}
-              balance={fest.nft.balance}
-              festivalDate={fest.nft.festivalDate}
+              nfts={fest.nfts}
+              nftBalances={fest.nftBalances}
               tokenSymbol={fest.token.symbol}
               isLoading={fest.isLoading}
               onReload={reload}

@@ -1,7 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ShieldCheck, AlertCircle, RefreshCw, CheckCircle2, ArrowUpRight } from 'lucide-react';
 import Stepper from './Stepper';
-import { EXPLORER, formatCost } from '../lib/format';
+import PurchaseModal from './PurchaseModal';
+import SearchSelect from './SearchSelect';
+import AssetsModal from './AssetsModal';
+import { EXPLORER, formatCost, formatAmount, shortAddr } from '../lib/format';
 
 const PAYING = ['paying', 'confirmingPayment'];
 const MINTING = ['minting', 'confirmingMint'];
@@ -36,6 +39,15 @@ export default function BuyWizard({
   isWrongNetwork,
   onConnect,
   token,
+  tokens,
+  registry,
+  selectToken,
+  nfts,
+  selectedNftId,
+  selectNft,
+  factor,
+  payAmount,
+  estimateFees,
   nft,
   randomPrice,
   quantity,
@@ -47,7 +59,22 @@ export default function BuyWizard({
   resetFlow,
   onGoTickets
 }) {
+  const [modalOpen, setModalOpen] = useState(false);
+  const [assetsOpen, setAssetsOpen] = useState(false);
   const steps = computeSteps({ account, flow });
+  const selectedNft = nfts.find((n) => n.id === selectedNftId) || nfts[0];
+  const review = {
+    tokenSymbol: token.symbol,
+    tokenAddress: token.address,
+    nftName: selectedNft.name,
+    nftAddress: selectedNft.address,
+    qty: quantity,
+    basePrice: randomPrice,
+    factor,
+    isBase: token.isBase,
+    payAmount,
+    mintCostText: formatCost(nft.priceWei, quantity)
+  };
   const hasToken = parseFloat(token.balance) > 0;
   const awaitingMint = flow.phase === 'awaitingMint';
   const quantities = Array.from({ length: nft.maxPerTx }, (_, i) => i + 1);
@@ -89,7 +116,7 @@ export default function BuyWizard({
             <button onClick={onGoTickets} className="btn-primary">
               Ver mis tickets
             </button>
-            <button onClick={resetFlow} className="btn-ghost">
+            <button onClick={() => { resetFlow(); setModalOpen(false); }} className="btn-ghost">
               Comprar otra
             </button>
             {flow.txHash && (
@@ -120,10 +147,53 @@ export default function BuyWizard({
     const locked = isBusy || awaitingMint;
     const buttonLabel = awaitingMint
       ? 'Reintentar minteo'
-      : `Pagar y mintear ${quantity} ${quantity === 1 ? 'entrada' : 'entradas'}`;
+      : 'Comenzar proceso de compra';
 
     return (
       <div className="space-y-5">
+        {/* NFT y token de pago */}
+        {!awaitingMint && (
+          <>
+            <SearchSelect
+              label="¿Qué NFT querés comprar?"
+              value={selectedNftId}
+              onChange={selectNft}
+              disabled={locked}
+              placeholder="Buscar NFT…"
+              options={nfts.map((n) => ({
+                value: n.id,
+                label: n.name,
+                hint: shortAddr(n.address),
+                keywords: n.address
+              }))}
+            />
+
+            <SearchSelect
+              label="¿Con qué token querés pagar?"
+              value={token.id}
+              onChange={selectToken}
+              disabled={locked}
+              placeholder="Buscar token…"
+              options={tokens.map((t) => ({
+                value: t.id,
+                label: t.symbol,
+                hint: `Saldo ${formatAmount(parseFloat(t.balance), 4)}`,
+                disabled: parseFloat(t.balance) <= 0,
+                keywords: t.address
+              }))}
+            />
+
+            <button
+              type="button"
+              onClick={() => setAssetsOpen(true)}
+              disabled={locked}
+              className="text-sm text-accent font-medium hover:underline disabled:opacity-50"
+            >
+              + Agregar o administrar tokens y NFTs
+            </button>
+          </>
+        )}
+
         {/* Precio de la ronda */}
         <div className="p-5 bg-surface-2 rounded-xl">
           <div className="flex justify-between items-center mb-2 gap-2">
@@ -143,15 +213,44 @@ export default function BuyWizard({
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-4xl font-semibold tabular-nums">
-              {awaitingMint ? flow.paid?.amount.split(' ')[0] : randomPrice}
+              {awaitingMint ? flow.paid?.amount.split(' ')[0] : formatAmount(payAmount)}
             </span>
-            <span className="text-lg font-medium text-muted">{token.symbol}</span>
+            <span className="text-lg font-medium text-muted">
+              {awaitingMint ? flow.paid?.symbol || token.symbol : token.symbol}
+            </span>
           </div>
-          <p className="text-sm text-muted mt-2 leading-relaxed">
-            {awaitingMint
-              ? 'Tu pago ya fue confirmado en la blockchain. Solo falta el minteo.'
-              : 'El precio se sortea entre 1 y tu saldo (máx. 1000). Se transfiere a la wallet creadora y luego pagas el costo de minteo en ETH.'}
-          </p>
+          {!awaitingMint && (
+            <div className="mt-3 text-sm space-y-1 tabular-nums">
+              <div className="flex justify-between gap-3">
+                <span className="text-muted">Precio base sorteado</span>
+                <span className="font-medium">{formatAmount(randomPrice)} MPC</span>
+              </div>
+              {token.isBase ? (
+                <div className="flex justify-between gap-3">
+                  <span className="text-muted">Factor de conversión</span>
+                  <span className="font-medium">× 1 (token base)</span>
+                </div>
+              ) : (
+                <>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-muted">Factor sorteado</span>
+                    <span className="font-medium">× {formatAmount(factor, 2)}</span>
+                  </div>
+                  <div className="flex justify-between gap-3 border-t border-line pt-1">
+                    <span className="text-muted">
+                      {formatAmount(randomPrice)} MPC × {formatAmount(factor, 2)}
+                    </span>
+                    <span className="font-semibold">
+                      = {formatAmount(payAmount)} {token.symbol}
+                    </span>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+          {awaitingMint && (
+            <p className="text-sm text-muted mt-2">Tu pago ya está confirmado. Solo falta el minteo.</p>
+          )}
         </div>
 
         {/* Cantidad */}
@@ -182,24 +281,11 @@ export default function BuyWizard({
           </div>
         </div>
 
-        {/* Resumen */}
-        <dl className="text-sm space-y-2 pt-1">
-          <div className="flex justify-between">
-            <dt className="text-muted">1. Pago en {token.symbol}</dt>
-            <dd className="font-medium tabular-nums">
-              {awaitingMint ? flow.paid?.amount : `${randomPrice} ${token.symbol}`}
-            </dd>
-          </div>
-          <div className="flex justify-between">
-            <dt className="text-muted">2. Minteo ({quantity}×)</dt>
-            <dd className="font-medium tabular-nums">{formatCost(nft.priceWei, quantity)}</dd>
-          </div>
-          <div className="border-t border-line pt-2 text-muted">
-            Además del costo, pagarás el gas de cada transacción en SepoliaETH.
-          </div>
-        </dl>
-
-        <button onClick={buy} disabled={isBusy} className="btn-primary w-full py-3.5 text-base">
+        <button
+          onClick={() => setModalOpen(true)}
+          disabled={isBusy || (!awaitingMint && payAmount <= 0)}
+          className="btn-primary w-full py-3.5 text-base"
+        >
           {isBusy ? (
             <>
               <RefreshCw className="w-5 h-5 animate-spin" aria-hidden="true" />
@@ -263,6 +349,26 @@ export default function BuyWizard({
       )}
 
       {renderBody()}
+
+      <AssetsModal
+        open={assetsOpen}
+        onClose={() => setAssetsOpen(false)}
+        tokens={tokens}
+        nfts={nfts}
+        {...registry}
+      />
+
+      <PurchaseModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        flow={flow}
+        isBusy={isBusy}
+        buy={buy}
+        resetFlow={resetFlow}
+        onGoTickets={onGoTickets}
+        review={review}
+        estimateFees={estimateFees}
+      />
     </section>
   );
 }

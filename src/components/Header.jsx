@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Ticket, Wallet, Copy, Check, ExternalLink, LogOut, ChevronDown, RefreshCw } from 'lucide-react';
-import { EXPLORER, shortAddr } from '../lib/format';
+import SearchSelect from './SearchSelect';
+import { EXPLORER, shortAddr, formatAmount } from '../lib/format';
 
 function WalletMenu({ account, onDisconnect }) {
   const [open, setOpen] = useState(false);
@@ -86,7 +87,9 @@ function WalletMenu({ account, onDisconnect }) {
 export default function Header({
   account,
   tokenSymbol,
-  tokenBalance,
+  tokens,
+  headerTokenId,
+  onHeaderTokenChange,
   ethBalance,
   isConnecting,
   hasLoaded,
@@ -122,16 +125,25 @@ export default function Header({
 
           {account && (
             <>
-              <div className="chip" title="Saldo del token">
-                {hasLoaded ? (
-                  <span>
-                    {Number(tokenBalance).toLocaleString('es-AR', { maximumFractionDigits: 4 })}{' '}
-                    <span className="text-muted">{tokenSymbol}</span>
-                  </span>
-                ) : (
-                  skeleton
-                )}
-              </div>
+              {hasLoaded ? (
+                <SearchSelect
+                  compact
+                  align="right"
+                  label="Saldo del token"
+                  placeholder="Buscar token…"
+                  value={headerTokenId}
+                  onChange={onHeaderTokenChange}
+                  options={tokens.map((t) => ({
+                    value: t.id,
+                    label: t.symbol,
+                    chipLabel: `${Number(t.balance).toLocaleString('es-AR', { maximumFractionDigits: 4 })} ${t.symbol}`,
+                    hint: `Saldo ${formatAmount(parseFloat(t.balance), 4)}`,
+                    keywords: t.address
+                  }))}
+                />
+              ) : (
+                <div className="chip">{skeleton}</div>
+              )}
               <div className="chip" title="Saldo de ETH">
                 {hasLoaded ? (
                   <span>

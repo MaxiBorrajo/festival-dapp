@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
+import SearchSelect from './SearchSelect';
 import { RefreshCw, ArrowUpRight, Ticket } from 'lucide-react';
-import { CONTRACT_ADDRESSES } from '../contracts';
 import { EXPLORER, formatFestivalDate, shortAddr } from '../lib/format';
 
 // Arte generativo: mismo ID => mismo diseño. Sin dependencias externas.
@@ -46,14 +46,14 @@ function TicketArt({ id, image, used }) {
   );
 }
 
-function TicketCard({ ticket, festivalDate, account }) {
-  const date = formatFestivalDate(festivalDate);
+function TicketCard({ ticket, account }) {
+  const date = formatFestivalDate(ticket.festivalDate);
   return (
     <article className="card overflow-hidden">
       <TicketArt id={ticket.id} image={ticket.image} used={ticket.used} />
       <div className="p-5 flex items-start justify-between gap-3">
         <div>
-          <p className="text-sm text-muted">UNQ-FEST · Acceso total</p>
+          <p className="text-sm text-muted">{ticket.nftName} · Acceso total</p>
           <h3 className="text-lg font-semibold mt-0.5">Pase #{ticket.id}</h3>
           <p className="text-sm text-muted mt-1">{date || 'Fecha a confirmar'}</p>
         </div>
@@ -82,7 +82,7 @@ function TicketCard({ ticket, festivalDate, account }) {
         </div>
         <div className="pt-2">
           <a
-            href={`${EXPLORER}/token/${CONTRACT_ADDRESSES.nft}?a=${ticket.id}`}
+            href={`${EXPLORER}/nft/${ticket.nftAddress}/${ticket.id}`}
             target="_blank"
             rel="noreferrer"
             className="text-accent inline-flex items-center gap-1 font-medium hover:underline"
@@ -95,7 +95,29 @@ function TicketCard({ ticket, festivalDate, account }) {
   );
 }
 
-export default function TicketsTab({ account, tickets, balance, festivalDate, tokenSymbol, isLoading, onReload, onGoBuy }) {
+const CHIP_LIMIT = 4;
+
+export default function TicketsTab({ account, tickets, nfts, nftBalances, isLoading, onReload, onGoBuy }) {
+  const [filter, setFilter] = useState('all');
+  const balance = Object.values(nftBalances).reduce((a, b) => a + b, 0);
+  const filtered = useMemo(
+    () => (filter === 'all' ? tickets : tickets.filter((t) => t.nftId === filter)),
+    [tickets, filter]
+  );
+  const options = [
+    { value: 'all', label: 'Todos', hint: `${balance} en total` },
+    ...nfts.map((n) => ({
+      value: n.id,
+      label: n.name,
+      hint: `${nftBalances[n.id] ?? 0} ${nftBalances[n.id] === 1 ? 'entrada' : 'entradas'}`,
+      keywords: n.address
+    }))
+  ];
+  const chip = (active) =>
+    `px-3 py-1.5 rounded-full border text-sm font-medium transition ${
+      active ? 'bg-accent text-accent-fg border-accent' : 'bg-surface border-line hover:bg-surface-2'
+    }`;
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center gap-3">
@@ -111,6 +133,34 @@ export default function TicketsTab({ account, tickets, balance, festivalDate, to
         </button>
       </div>
 
+      {account && balance > 0 &&
+        (nfts.length > CHIP_LIMIT ? (
+          <SearchSelect
+            label="Filtrar por NFT"
+            value={filter}
+            onChange={setFilter}
+            options={options}
+            placeholder="Buscar NFT…"
+          />
+        ) : (
+          <div role="radiogroup" aria-label="Filtrar por NFT" className="flex flex-wrap gap-2">
+            <button role="radio" aria-checked={filter === 'all'} onClick={() => setFilter('all')} className={chip(filter === 'all')}>
+              Todos <span className="opacity-80 tabular-nums">({balance})</span>
+            </button>
+            {nfts.map((n) => (
+              <button
+                key={n.id}
+                role="radio"
+                aria-checked={filter === n.id}
+                onClick={() => setFilter(n.id)}
+                className={chip(filter === n.id)}
+              >
+                {n.name} <span className="opacity-80 tabular-nums">({nftBalances[n.id] ?? 0})</span>
+              </button>
+            ))}
+          </div>
+        ))}
+
       {!account ? (
         <div className="card p-10 text-center text-sm text-muted">
           Conecta tu billetera para ver tus entradas.
@@ -123,13 +173,15 @@ export default function TicketsTab({ account, tickets, balance, festivalDate, to
           <div>
             <h3 className="text-base font-semibold">Aún no tienes entradas</h3>
             <p className="text-sm text-muted max-w-sm mx-auto mt-1">
-              Usa tus tokens {tokenSymbol} para desbloquear la compra y conseguir tu primer pase.
+              Usa tus tokens para desbloquear la compra y conseguir tu primer pase.
             </p>
           </div>
           <button onClick={onGoBuy} className="btn-primary">
             Ir a comprar
           </button>
         </div>
+      ) : filtered.length === 0 && tickets.length > 0 ? (
+        <div className="card p-10 text-center text-sm text-muted">No tienes entradas de este NFT.</div>
       ) : tickets.length === 0 ? (
         <div className="card p-10 text-center text-sm text-muted">
           {isLoading
@@ -138,8 +190,8 @@ export default function TicketsTab({ account, tickets, balance, festivalDate, to
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {tickets.map((t) => (
-            <TicketCard key={t.id} ticket={t} festivalDate={festivalDate} account={account} />
+          {filtered.map((t) => (
+            <TicketCard key={t.key} ticket={t} account={account} />
           ))}
         </div>
       )}
